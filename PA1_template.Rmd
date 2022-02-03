@@ -1,25 +1,158 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Process Steps Taken data"
+output:
+  html_document: default
+  pdf_document: default
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
-## Loading and preprocessing the data
-
-
-
-## What is mean total number of steps taken per day?
-
+## Reading data
 
 
-## What is the average daily activity pattern?
+```{r read_data}
+library(reshape2)
+df <- read.csv("./activity.csv",header=TRUE)
+```
+## Calculate SUM of Steps Taken by day 
+```{r data_adjust,echo=TRUE}
+df1<-tapply(df$steps,factor(df$date), sum)
+df1 <- as.data.frame(df1)
+df1$date=rownames(df1)
+names(df1) <- c("value","date")
+dfMelt<- melt(df1,id=c("date"),measure.vars=c("value"))
+```
+## Calculate HISTO/Frequency of steps per day
+```{r histo,echo=TRUE}
+hist(dfMelt$value, xlab="Class of Total Number of Steps per day", ylab="Number of Days", main="Total Number of Steps taken each day")
+```
+
+## Calculate mean steps
+```{r mean ,echo=TRUE}
+mean<- mean(dfMelt$value,na.rm = TRUE)
+print(mean)
+```
+
+## Calculate median steps
+```{r median ,echo=TRUE}
+median<- median(dfMelt$value,na.rm = TRUE)
+print(median)
+```
+## Calculate pattern of average steps in day
+```{r pattern ,echo=TRUE}
+meanStepsbyInterval<-aggregate(df$steps,by=list(df$interval), FUN=mean,na.rm=TRUE)
+names(meanStepsbyInterval) <- c("interval","meanSteps")
+with(meanStepsbyInterval, plot(interval, meanSteps, type = "l"))
+```
+
+## Calculate interval with max steps
+```{r max ,echo=TRUE}
+maxInterval <-  meanStepsbyInterval[meanStepsbyInterval$meanSteps==max(meanStepsbyInterval$meanSteps),"interval"]
+print(maxInterval)
+```
+
+## Calculate number of NAs
+```{r NAs ,echo=TRUE}
+na <- df[is.na(df$steps),"steps"]
+print(length(na))
+```
+
+## Define df1 with NAs replaced by mean for that interval
+```{r replace_NAs ,echo=FALSE}
+fill_NA <- function(df) 
+  {
+   index <- 1
+   df1 <- df
+   meanSteps<-aggregate(df$steps,by=list(df$interval), FUN=mean,na.rm=TRUE)
+   names(meanSteps) <- c("interval","meanSteps") 
+   while(index <= length(df[,"steps"]))
+     #while(index <= 20)
+     {
+    steps<- df[index,"steps"]
+    #print(steps)
+    interval<- df[index,"interval"]
+   # print(interval)
+    meanForInterval <- meanSteps[meanSteps$interval==interval,"meanSteps"]
+    #print(meanForInterval)
+    if (is.na(steps)) 
+     {
+     
+       df1[index,"steps"] <- meanForInterval
+       df1[index,"interval"] <- interval
+       df1[index,"date"] <- df[index,"date"]
+    }
+    else  {
+      df1[index,"steps"] <- steps
+      df1[index,"interval"] <- interval
+      df1[index,"date"] <- df[index,"date"]
+    }
+   index <- index+1
+  
+   }
+   return(df1)
+}
+
+df1<- fill_NA(df)
+str(df1)
+```
+
+## Histo of steps taken without NAs
+```{r histo_noNas ,echo=TRUE}
+sumStepsbyDate <- aggregate(df1$steps,by=list(df1$date),sum)
+names(sumStepsbyDate) =c("date","sumSteps")
+hist(sumStepsbyDate$sumSteps, xlab="Class of Total Number of Steps per day", ylab="Number of Days", main="Total Number of Steps taken each day w/o NAs")
 
 
 
-## Imputing missing values
+```
+
+## Calculate mean steps w/o NAs
+```{r mean_NA ,echo=TRUE}
+mean<- mean(sumStepsbyDate$sumSteps)
+print(mean)
+```
+
+## Calculate median steps w/o NAs
+```{r median_NA ,echo=TRUE}
+median<- median(sumStepsbyDate$sumSteps)
+print(median)
+```
 
 
-
-## Are there differences in activity patterns between weekdays and weekends?
+## Pattern of Steps in WorkDay and Holiday
+```{r histo_workday ,echo=TRUE}
+dayOfWeek <- function(df1) 
+{
+  index <- 1
+  # df1 <- df
+  
+  while(index <= length(df1[,"steps"]))
+    #while(index <= 20)
+  {
+    date<- df1[index,"date"]
+    day <- weekdays(date)
+    
+    if (day=="domenica"|day=="sabato") 
+    {
+      df1[index,"weekday"] <- "holyDay"
+     
+    }
+    else  {
+     
+      df1[index,"weekday"] <- "workDay"
+    }
+    index <- index+1
+    
+  }
+  return(df1)
+}
+df1$date <- as.Date(df1$date,"%Y-%m-%d")
+df1 <- dayOfWeek(df1 )
+df1$weekday <- factor(df1$weekday)
+meanSteps<-aggregate(df1$steps,by=list(df1$interval,df1$weekday), FUN=mean)
+names(meanSteps) <- c("interval", "day", "steps")
+library(lattice)
+xyplot(steps ~ interval | day, meanSteps, type = "l", layout = c(1, 2), xlab = "Interval", ylab = "Number of steps")
+```
